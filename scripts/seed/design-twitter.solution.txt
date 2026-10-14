@@ -1,0 +1,89 @@
+class Solution {
+    constructor() {
+        this.count=0;
+        this.users = {};
+        this.tweetMap={};
+    }
+
+    /**
+     * @param {number} userId
+     * @param {number} tweetId
+     * @return {void}
+     */
+    postTweet(userId, tweetId) {
+        const tweetList = this.tweetMap[userId] ? [...this.tweetMap[userId], [this.count,tweetId]] : [[this.count, tweetId]];
+        if(tweetList.length > 10) tweetList.shift();
+        this.tweetMap[userId] = tweetList;
+
+        this.count--;
+    }
+
+    /**
+     * @param {number} userId
+     * @return {number[]}
+     */
+    getNewsFeed(userId) {
+       const res = [];
+       if(!this.users[userId])  this.users[userId] = new Set();
+       this.users[userId] = this.users[userId].add(userId);
+       const minHeap = new PriorityQueue((a,b) => a[0]-b[0]);
+
+       if(this.users[userId].size >= 10){
+        const maxHeap = new PriorityQueue((a, b) => b[0]-a[0]);
+        for(const id of this.users[userId]){
+            if(!this.tweetMap[id]) continue;
+            const tweets = this.tweetMap[id];
+            const idx = tweets.length - 1;
+            const [cnt, tId] = tweets[idx];
+            maxHeap.enqueue([cnt, tId, id, idx - 1]);
+            if(maxHeap.size() > 10) maxHeap.dequeue();
+        }
+        while(maxHeap.size()){
+            minHeap.enqueue(maxHeap.dequeue());
+        }
+       }else{
+        for(const id of this.users[userId]){
+            if(!this.tweetMap[id]) continue;
+            const tweets = this.tweetMap[id];
+            const idx = tweets.length - 1;
+            const [cnt, tId] = tweets[idx];
+            minHeap.enqueue([cnt, tId, id, idx - 1]);
+        }
+       }
+
+       while(minHeap.size() > 0 && res.length < 10){
+        const [_, tId, fId, idx] = minHeap.dequeue();
+        res.push(tId);
+         if (idx >= 0) {
+            const [olderCount, olderTId] = this.tweetMap[fId][idx];
+            minHeap.enqueue([olderCount, olderTId, fId, idx - 1]);
+         }
+       }
+
+       return res;
+    }
+
+    /**
+     * @param {number} followerId
+     * @param {number} followeeId
+     * @return {void}
+     */
+    follow(followerId, followeeId) {
+        const setOfFollowers = this.users[followerId] ? this.users[followerId] : new Set();
+        setOfFollowers.add(followeeId)
+        this.users[followerId] = setOfFollowers;
+    }
+
+    /**
+     * @param {number} followerId
+     * @param {number} followeeId
+     * @return {void}
+     */
+    unfollow(followerId, followeeId) {
+        const setOfFollowers = this.users[followerId] ? this.users[followerId] : null;
+        if(!setOfFollowers) return;
+        
+        setOfFollowers.delete(followeeId);
+        this.users[followerId] = setOfFollowers;
+    }
+}
