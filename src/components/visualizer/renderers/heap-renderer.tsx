@@ -5,9 +5,12 @@ import { AnimatePresence } from "framer-motion";
 import { VIZ_LIMITS } from "@/lib/viz/constants";
 import { cellStatus } from "@/lib/viz/diff";
 import { nodeLabel, summarizeValue } from "@/lib/viz/format";
+import { objectHost } from "@/lib/viz/overlay-types";
 import { itemKeys, itemsOf } from "@/lib/viz/structures";
 import { heapChildren, heapParent, layoutBinaryTree } from "@/lib/viz/tree-layout";
 import { cn } from "@/lib/utils";
+import { OutOfRangeChips, pointersPastCells } from "./array-renderer";
+import { gutterStyle } from "./pointer-gutter";
 import type { RendererProps } from "./renderer-types";
 import { EmptyChip, MoreChip } from "./small-chips";
 import { TreeCanvas, type CanvasEdge, type CanvasNode, type Relation } from "./tree-canvas";
@@ -40,12 +43,15 @@ function heapEdges(count: number, keys: readonly string[]): CanvasEdge[] {
 
 /** Priority queue as a binary tree plus the backing array it is stored in (hover a slot to see parent/children). */
 export function HeapRenderer({ object }: RendererProps) {
-  const { objects, diff } = useViz();
+  const { objects, diff, pointers } = useViz();
   const { items, total } = itemsOf(object);
   const [focusIndex, setFocusIndex] = useState<number | null>(null);
   const treeCount = Math.min(items.length, VIZ_LIMITS.maxHeapTreeNodes);
   const keys = itemKeys(items);
   const layout = useMemo(() => layoutBinaryTree(treeCount, heapChildren(treeCount)), [treeCount]);
+  const host = objectHost(object.id);
+  const slotPointers = items.map((_, index) => pointers.at(host, String(index)));
+  const maxPerSlot = slotPointers.reduce((most, list) => Math.max(most, list.length), 0);
 
   const nodes: CanvasNode[] = items.slice(0, treeCount).map((item, index) => ({
     key: keys[index],
@@ -57,6 +63,7 @@ export function HeapRenderer({ object }: RendererProps) {
     relation: relationOf(index, focusIndex),
     isEmphasized: index === 0,
     caption: String(index),
+    pointers: slotPointers[index],
   }));
 
   if (items.length === 0) {
@@ -77,7 +84,7 @@ export function HeapRenderer({ object }: RendererProps) {
         ariaLabel={`Heap tree of ${total} items`}
         onHoverChange={(key) => setFocusIndex(key === null ? null : keys.indexOf(key))}
       />
-      <div role="group" aria-label="Heap backing array" className="flex flex-wrap items-start gap-1.5 border-t border-border pt-2">
+      <div role="group" aria-label="Heap backing array" style={gutterStyle(maxPerSlot, "top")} className={cn("flex flex-wrap items-start gap-1.5 border-t border-border", maxPerSlot === 0 && "pt-2")}>
         <AnimatePresence initial={false}>
           {items.map((item, index) => {
             const relation = relationOf(index, focusIndex);
@@ -88,6 +95,7 @@ export function HeapRenderer({ object }: RendererProps) {
                 caption={String(index)}
                 status={cellStatus(diff, object.id, String(index))}
                 isEmphasized={index === 0}
+                pointers={slotPointers[index]}
                 className={cn("min-h-8", relation && RELATION_RING[relation])}
                 onHoverChange={(isActive) => setFocusIndex(isActive ? index : null)}
               >
@@ -97,6 +105,7 @@ export function HeapRenderer({ object }: RendererProps) {
           })}
         </AnimatePresence>
         <MoreChip count={total - items.length} />
+        <OutOfRangeChips pointers={[...pointersPastCells(pointers, host, items.length), ...pointers.outOfRange(host)]} />
       </div>
     </div>
   );

@@ -6,11 +6,18 @@ import { spring } from "@/lib/motion";
 import type { SObject, SValue } from "@/lib/tracer/types";
 import { cellStatus, valueKey } from "@/lib/viz/diff";
 import { containerLabel } from "@/lib/viz/format";
+import { objectHost, type Pointer } from "@/lib/viz/overlay-types";
 import type { RendererProps } from "./renderer-types";
 import { ChangeHalo } from "./change-halo";
+import { gutterStyle, markStackPx } from "./pointer-gutter";
+import { PointerMarks } from "./pointer-marks";
+import { pointerRing } from "./pointer-styles";
 import { EmptyChip, MoreChip } from "./small-chips";
 import { InlineValue, ValueView } from "./value-view";
 import { useViz } from "./viz-context";
+
+/** Space between rows when nothing points at them (px). */
+const ROW_GAP_PX = 6;
 
 interface MapRow {
   cellKey: string;
@@ -36,7 +43,16 @@ function KeyChip({ rowKey }: { rowKey: SValue | string }) {
   );
 }
 
-function MapRowView({ row, objectId, path, depth, ancestors }: { row: MapRow; objectId: number; path: string; depth: number; ancestors: readonly number[] }) {
+interface MapRowViewProps {
+  row: MapRow;
+  objectId: number;
+  path: string;
+  depth: number;
+  ancestors: readonly number[];
+  pointers: readonly Pointer[];
+}
+
+function MapRowView({ row, objectId, path, depth, ancestors, pointers }: MapRowViewProps) {
   const { diff } = useViz();
   return (
     <motion.div
@@ -45,9 +61,15 @@ function MapRowView({ row, objectId, path, depth, ancestors }: { row: MapRow; ob
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -8 }}
       transition={spring.snappy}
+      style={pointers.length > 0 ? pointerRing(pointers) : undefined}
       className="relative flex flex-wrap items-start gap-x-2 gap-y-1 rounded-lg border border-border bg-muted/40 px-2 py-1.5"
     >
       <ChangeHalo status={cellStatus(diff, objectId, row.cellKey)} />
+      {pointers.length > 0 ? (
+        <span className="absolute top-0 right-4 size-0">
+          <PointerMarks pointers={pointers} />
+        </span>
+      ) : null}
       <KeyChip rowKey={row.key} />
       <ArrowRightIcon className="mt-1.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
       <div className="min-w-0 flex-1 basis-24 pt-0.5">
@@ -59,14 +81,17 @@ function MapRowView({ row, objectId, path, depth, ancestors }: { row: MapRow; ob
 
 /** Key to value rows for maps, plain objects and class instances (`this`). */
 export function MapRenderer({ object, path, depth, ancestors }: RendererProps) {
+  const { pointers } = useViz();
   const { rows, total } = rowsOf(object);
+  const rowPointers = rows.map((row) => pointers.at(objectHost(object.id), row.cellKey));
+  const maxPerRow = rowPointers.reduce((most, list) => Math.max(most, list.length), 0);
   return (
     <div data-testid="renderer-map" className="space-y-1.5">
       {depth === 0 ? <p className="micro-label text-primary/80">{containerLabel(object)}</p> : null}
-      <div role="group" aria-label={containerLabel(object)} className="space-y-1.5">
+      <div role="group" aria-label={containerLabel(object)} style={{ ...gutterStyle(maxPerRow, "top"), rowGap: Math.max(ROW_GAP_PX, markStackPx(maxPerRow)) }} className="flex flex-col">
         <AnimatePresence initial={false}>
-          {rows.map((row) => (
-            <MapRowView key={row.cellKey} row={row} objectId={object.id} path={path} depth={depth} ancestors={ancestors} />
+          {rows.map((row, index) => (
+            <MapRowView key={row.cellKey} row={row} objectId={object.id} path={path} depth={depth} ancestors={ancestors} pointers={rowPointers[index]} />
           ))}
         </AnimatePresence>
       </div>

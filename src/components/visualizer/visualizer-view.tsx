@@ -65,7 +65,13 @@ export function VisualizerView({ question }: { question: Question }) {
             ) : null}
           </div>
           <div className={cn("min-w-0", SIDE_COLUMN_SCROLL)}>
-            <StepPanels trace={run.trace} stepIndex={player.stepIndex} hints={question.visualHints} isRunning={run.isRunning} />
+            <StepPanels
+              trace={run.trace}
+              stepIndex={player.stepIndex}
+              hints={question.visualHints}
+              code={question.solutionCode}
+              isRunning={run.isRunning}
+            />
           </div>
         </div>
         <div className="sticky bottom-0 z-30 -mx-4 border-t border-border bg-background/85 px-4 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">

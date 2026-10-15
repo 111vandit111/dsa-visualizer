@@ -6,6 +6,7 @@ type ObjectOf = Extract<SObject, { k: "object" }>;
 
 const NODE_VALUE_FIELDS = ["val", "value", "key", "data", "id", "name"] as const;
 const NEXT_FIELD = "next";
+const PREV_FIELD = "prev";
 const LEFT_FIELD = "left";
 const RIGHT_FIELD = "right";
 
@@ -29,10 +30,43 @@ export function pickNodeValue(object: ObjectOf): SValue | null {
   return primitive ? primitive[1] : null;
 }
 
+const COLOR_FIELD = "color";
+const KEYS_FIELD = "keys";
+
+function primitiveText(value: SValue): string | null {
+  if (value.k === "string" || value.k === "number" || value.k === "boolean" || value.k === "bigint") return String(value.v);
+  return null;
+}
+
+/** Binary tree label: the node value, suffixed with a primitive `color` field (red-black trees) as "20:R". */
+function binaryNodeValue(object: ObjectOf): SValue | null {
+  const value = pickNodeValue(object);
+  const color = entryOf(object, COLOR_FIELD);
+  const colorText = color ? primitiveText(color) : null;
+  const valueText = value ? primitiveText(value) : null;
+  if (colorText === null || valueText === null) return value;
+  return { k: "string", v: `${valueText}:${colorText}` };
+}
+
+export type NodeColor = "red" | "black";
+
+const RED_VALUES = new Set(["r", "red"]);
+const BLACK_VALUES = new Set(["b", "black"]);
+
+/** Red-black colour of a node: a primitive `color` field of "R"/"red" or "B"/"black" (any case), else null. */
+export function nodeColor(object: ObjectOf): NodeColor | null {
+  const color = entryOf(object, COLOR_FIELD);
+  const text = color?.k === "string" ? color.v.trim().toLowerCase() : null;
+  if (text === null) return null;
+  if (RED_VALUES.has(text)) return "red";
+  return BLACK_VALUES.has(text) ? "black" : null;
+}
+
 export type ChainEnd = "null" | "cycle" | "truncated" | "unknown";
 
 export interface ListChain {
-  nodes: { objectId: number; value: SValue | null }[];
+  /** `isLinkedBack`: the node's `prev` points at the previous node of the chain (doubly linked). */
+  nodes: { objectId: number; value: SValue | null; isLinkedBack: boolean }[];
   end: ChainEnd;
   /** Object id the chain loops back to (end === "cycle"). */
   cycleTo: number | null;
@@ -51,7 +85,9 @@ export function collectListChain(objects: ObjectTable, rootId: number, maxNodes:
       break;
     }
     visited.add(current.id);
-    nodes.push({ objectId: current.id, value: pickNodeValue(current) });
+    const previous = nodes[nodes.length - 1];
+    const back = entryOf(current, PREV_FIELD);
+    nodes.push({ objectId: current.id, value: pickNodeValue(current), isLinkedBack: !!previous && back?.k === "ref" && back.id === previous.objectId });
     const next: SValue | undefined = entryOf(current, NEXT_FIELD);
     if (next === undefined || next.k !== "ref") {
       end = next?.k === "null" ? "null" : "unknown";
@@ -74,6 +110,8 @@ export interface TreeShapeNode {
   /** Object id when the node is an object (for identity animation), else null. */
   objectId: number | null;
   value: SValue | null;
+  /** Red-black colour (binary object trees only). */
+  color?: NodeColor | null;
 }
 
 export interface TreeShape {
@@ -105,7 +143,7 @@ export function buildObjectTreeShape(objects: ObjectTable, rootId: number, maxNo
       return null;
     }
     indexOf.set(id, nodes.length);
-    nodes.push({ key: `o${id}`, objectId: id, value: pickNodeValue(target) });
+    nodes.push({ key: `o${id}`, objectId: id, value: binaryNodeValue(target), color: nodeColor(target) });
     children.push([null, null]);
     queue.push(target);
     return nodes.length - 1;
@@ -118,6 +156,128 @@ export function buildObjectTreeShape(objects: ObjectTable, rootId: number, maxNo
     children[slot] = [admit(childId(object, LEFT_FIELD)), admit(childId(object, RIGHT_FIELD))];
   }
   return { nodes, children, isTruncated };
+}
+
+export interface NaryTreeShape {
+  nodes: TreeShapeNode[];
+  /** children[i] = indices into `nodes` of node i's children, in order. */
+  children: number[][];
+  /** edgeLabels[i][k] = label of the edge to children[i][k]: trie char / map key, else null. */
+  edgeLabels: (string | null)[][];
+  isTruncated: boolean;
+}
+
+const CHILDREN_FIELD = "children";
+
+interface ChildLink {
+  id: number;
+  label: string | null;
+}
+
+function keyLabel(key: SValue): string {
+  return key.k === "ref" ? "" : String("v" in key ? key.v : key.k);
+}
+
+/** Child references of a node: `children` as an array of refs, or an object/Map of key -> ref (key becomes the edge label). */
+function childLinks(objects: ObjectTable, object: ObjectOf): ChildLink[] {
+  const container = resolveChildren(objects, object);
+  if (!container) return [];
+  const links: ChildLink[] = [];
+  if (container.k === "array") {
+    for (const item of container.items) if (item.k === "ref") links.push({ id: item.id, label: null });
+  } else if (container.k === "object") {
+    for (const [name, value] of container.entries) if (value.k === "ref") links.push({ id: value.id, label: name });
+  } else if (container.k === "map") {
+    for (const [key, value] of container.entries) if (value.k === "ref") links.push({ id: value.id, label: keyLabel(key) });
+  }
+  return links;
+}
+
+function resolveChildren(objects: ObjectTable, object: ObjectOf): SObject | null {
+  const value = entryOf(object, CHILDREN_FIELD);
+  if (value?.k !== "ref") return null;
+  return objects[value.id] ?? null;
+}
+
+/** B-tree style nodes: a `keys` array of primitives is shown joined, e.g. "20,50,80". */
+function keysLabel(objects: ObjectTable, object: ObjectOf): SValue | null {
+  const value = entryOf(object, KEYS_FIELD);
+  if (value?.k !== "ref") return null;
+  const keys = objects[value.id];
+  if (keys?.k !== "array") return null;
+  const parts = keys.items.map(primitiveText);
+  if (parts.some((part) => part === null)) return null;
+  return { k: "string", v: parts.join(",") };
+}
+
+/** Label of an n-ary node: a named value field, else (arrays of children) the first primitive field; trie nodes without one have none. */
+function naryNodeValue(objects: ObjectTable, object: ObjectOf, isKeyed: boolean): SValue | null {
+  const keys = keysLabel(objects, object);
+  if (keys !== null) return keys;
+  if (isKeyed && !NODE_VALUE_FIELDS.some((name) => entryOf(object, name))) return null;
+  return pickNodeValue(object);
+}
+
+/** Breadth-first walk over `children` from `rootId` (array of refs, or object/Map key -> ref). Each object appears once. */
+export function buildNaryTreeShape(objects: ObjectTable, rootId: number, maxNodes: number): NaryTreeShape {
+  const nodes: TreeShapeNode[] = [];
+  const children: number[][] = [];
+  const edgeLabels: (string | null)[][] = [];
+  const indexOf = new Map<number, number>();
+  const queue: ObjectOf[] = [];
+  let isTruncated = false;
+
+  const admit = (id: number): number | null => {
+    if (indexOf.has(id)) return null;
+    const target = resolveObject(objects, { k: "ref", id });
+    if (!target) return null;
+    if (nodes.length >= maxNodes) {
+      isTruncated = true;
+      return null;
+    }
+    indexOf.set(id, nodes.length);
+    const kind = resolveChildren(objects, target)?.k;
+    const isKeyed = kind === "object" || kind === "map";
+    nodes.push({ key: `o${id}`, objectId: id, value: naryNodeValue(objects, target, isKeyed) });
+    children.push([]);
+    edgeLabels.push([]);
+    queue.push(target);
+    return nodes.length - 1;
+  };
+
+  admit(rootId);
+  for (let cursor = 0; cursor < queue.length; cursor++) {
+    const object = queue[cursor];
+    const slot = indexOf.get(object.id) as number;
+    for (const link of childLinks(objects, object)) {
+      const child = admit(link.id);
+      if (child === null) continue;
+      children[slot].push(child);
+      edgeLabels[slot].push(link.label);
+    }
+  }
+  return { nodes, children, edgeLabels, isTruncated };
+}
+
+function isObjectRef(objects: ObjectTable, value: SValue): boolean {
+  return value.k === "ref" && objects[value.id]?.k === "object";
+}
+
+/** True for an object whose `children` is an array of node refs (or empty), or an object/Map whose values are node refs (trie). */
+export function hasChildrenShape(objects: ObjectTable, object: SObject): boolean {
+  if (object.k !== "object") return false;
+  const container = resolveChildren(objects, object);
+  if (!container) return false;
+  switch (container.k) {
+    case "array":
+      return container.items.every((item) => isObjectRef(objects, item));
+    case "object":
+      return container.entries.every(([, value]) => isObjectRef(objects, value));
+    case "map":
+      return container.entries.every(([, value]) => isObjectRef(objects, value));
+    default:
+      return false;
+  }
 }
 
 /** LeetCode level-order array (`[3, 9, 20, null, null, 15, 7]`): null items are missing nodes and have no children. */

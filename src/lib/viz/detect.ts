@@ -1,4 +1,7 @@
 import type { SObject, SRef, SValue, VisualHintType } from "@/lib/tracer/types";
+import { isBarsCompatible } from "./bars";
+import { isGraphShaped, isNodeArrayGraph } from "./graph-model";
+import { hasChildrenShape } from "./structures";
 import type { ObjectTable, RenderType } from "./types";
 
 const NEXT_FIELD = "next";
@@ -44,12 +47,12 @@ function isRectangular(objects: ObjectTable, array: Extract<SObject, { k: "array
   return width > 0 && rows.every((row) => row.length === width);
 }
 
-function isHintCompatible(objects: ObjectTable, object: SObject, hint: VisualHintType): boolean {
+function isHintCompatible(objects: ObjectTable, object: SObject, hint: VisualHintType, nameHint?: string): boolean {
   switch (hint) {
     case "heap":
       return object.k === "heap" || object.k === "array";
     case "tree":
-      return object.k === "array" || (object.k === "object" && hasTreeShape(object));
+      return object.k === "array" || (object.k === "object" && (hasTreeShape(object) || hasChildrenShape(objects, object)));
     case "array":
       return object.k === "array" || object.k === "heap" || object.k === "set";
     case "grid":
@@ -60,10 +63,14 @@ function isHintCompatible(objects: ObjectTable, object: SObject, hint: VisualHin
       return object.k === "set" || object.k === "array";
     case "linkedlist":
       return object.k === "array" || (object.k === "object" && hasLinkedListShape(object));
+    case "bars":
+      return isBarsCompatible(object);
+    case "graph":
+      return isGraphShaped(objects, object.id, nameHint);
   }
 }
 
-function autoDetect(objects: ObjectTable, object: SObject): RenderType {
+function autoDetect(objects: ObjectTable, object: SObject, nameHint?: string): RenderType {
   switch (object.k) {
     case "heap":
       return "heap";
@@ -72,20 +79,23 @@ function autoDetect(objects: ObjectTable, object: SObject): RenderType {
     case "map":
       return "map";
     case "array":
-      return isRectangular(objects, object) ? "grid" : "array";
+      if (isRectangular(objects, object)) return "grid";
+      return isNodeArrayGraph(objects, object.id, nameHint) ? "graph" : "array";
     case "object":
       if (hasLinkedListShape(object)) return "linkedlist";
-      return hasTreeShape(object) ? "tree" : "map";
+      if (hasTreeShape(object) || hasChildrenShape(objects, object)) return "tree";
+      return isGraphShaped(objects, object.id, nameHint) ? "graph" : "map";
   }
 }
 
 /**
  * Picks how an object is drawn. A compatible `hint` wins; otherwise the shape decides.
+ * `nameHint` is the variable name holding the object (it breaks ties between graph formats).
  * Returns null when the ref does not resolve in `objects`.
  */
-export function detectRenderType(objects: ObjectTable, ref: SRef, hint?: VisualHintType): RenderType | null {
+export function detectRenderType(objects: ObjectTable, ref: SRef, hint?: VisualHintType, nameHint?: string): RenderType | null {
   const object = objects[ref.id];
   if (!object) return null;
-  if (hint && isHintCompatible(objects, object, hint)) return hint;
-  return autoDetect(objects, object);
+  if (hint && isHintCompatible(objects, object, hint, nameHint)) return hint;
+  return autoDetect(objects, object, nameHint);
 }

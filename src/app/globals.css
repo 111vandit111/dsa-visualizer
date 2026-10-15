@@ -76,6 +76,14 @@
   --viz-amber: #ffb454;
   --viz-rose: #ff5d73;
   --viz-lime: #b8f34a;
+  --ptr-1: #4cc9f0;
+  --ptr-2: #ff9f5a;
+  --ptr-3: #ff7eb6;
+  --ptr-4: #6ee7a0;
+  --ptr-5: #a78bfa;
+  --ptr-6: #fde047;
+  --ptr-7: #ff6b6b;
+  --ptr-8: #7c8cff;
   --easy: #3ddc97;
   --medium: #ffb454;
   --hard: #ff5d73;
@@ -167,6 +175,47 @@
   text-transform: uppercase;
   letter-spacing: 0.14em;
   color: var(--muted-foreground);
+}
+
+@utility ptr-ring {
+  box-shadow: 0 0 0 2px var(--ptr), 0 0 14px -2px color-mix(in oklch, var(--ptr) 55%, transparent);
+}
+
+@utility ptr-tint {
+  background-color: color-mix(in oklch, var(--ptr) 16%, transparent);
+}
+
+@utility ptr-text {
+  color: var(--ptr);
+}
+
+@utility ptr-border {
+  border-color: var(--ptr);
+}
+
+@utility ptr-chip {
+  color: var(--ptr);
+  border: 1px solid color-mix(in oklch, var(--ptr) 55%, transparent);
+  background-color: color-mix(in oklch, var(--ptr) 14%, var(--background));
+}
+
+/* A name chip of a caller-frame pointer: dashed and unfilled instead of faded, so its text keeps AA contrast. */
+@utility ptr-chip-dim {
+  color: color-mix(in oklch, var(--ptr) 70%, var(--muted-foreground));
+  border: 1px dashed color-mix(in oklch, var(--ptr) 45%, transparent);
+  background-color: transparent;
+}
+
+@utility ptr-stroke {
+  stroke: var(--ptr);
+}
+
+@utility ptr-fill {
+  fill: var(--ptr);
+}
+
+@utility ptr-dim {
+  opacity: 0.55;
 }
 
 @keyframes glow-pulse {

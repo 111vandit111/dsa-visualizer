@@ -9,7 +9,9 @@
     "lint": "eslint",
     "test": "vitest run",
     "typecheck": "next typegen && tsc --noEmit",
-    "seed": "tsx --env-file=.env.local scripts/seed.ts"
+    "seed": "tsx --env-file=.env.local scripts/seed.ts",
+    "seed:samples": "tsx --env-file=.env.local scripts/seed-samples.ts",
+    "check:samples": "tsx scripts/check-samples.ts"
   },
   "dependencies": {
     "@codemirror/lang-javascript": "^6.2.5",

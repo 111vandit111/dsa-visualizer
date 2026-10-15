@@ -4,8 +4,11 @@ import type { ReactNode } from "react";
 import { motion } from "framer-motion";
 import { spring } from "@/lib/motion";
 import { cn } from "@/lib/utils";
+import type { Pointer } from "@/lib/viz/overlay-types";
 import type { CellStatus } from "@/lib/viz/types";
 import { ChangeHalo } from "./change-halo";
+import { PointerMarks } from "./pointer-marks";
+import { pointerRing } from "./pointer-styles";
 import { TONE_STYLES, type Tone } from "./tones";
 
 interface ValueCellProps {
@@ -14,6 +17,8 @@ interface ValueCellProps {
   /** Small label under the cell (array index). */
   caption?: string;
   isEmphasized?: boolean;
+  /** Live variables pointing at this cell: a persistent ring and name chips (no change when empty). */
+  pointers?: readonly Pointer[];
   className?: string;
   testId?: string;
   /** Shown to the right of the cell (e.g. a list arrow). */
@@ -27,7 +32,7 @@ const ENTER = { opacity: 0, scale: 0.85 };
 const SETTLED = { opacity: 1, scale: 1 };
 
 /** One animated cell: fades/scales in when added, out when removed, flashes a halo when changed. */
-export function ValueCell({ status, tone, caption, isEmphasized = false, className, testId, trailing, onHoverChange, children }: ValueCellProps) {
+export function ValueCell({ status, tone, caption, isEmphasized = false, pointers, className, testId, trailing, onHoverChange, children }: ValueCellProps) {
   const style = TONE_STYLES[tone];
   return (
     <motion.div
@@ -50,9 +55,11 @@ export function ValueCell({ status, tone, caption, isEmphasized = false, classNa
             isEmphasized && style.glow,
             className,
           )}
+          style={pointers ? pointerRing(pointers) : undefined}
         >
           <ChangeHalo status={status} />
           {children}
+          {pointers && pointers.length > 0 ? <PointerMarks pointers={pointers} /> : null}
         </div>
         {caption === undefined ? null : <span className="micro-label text-[10px] tracking-wider">{caption}</span>}
       </div>

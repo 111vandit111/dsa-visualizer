@@ -5,7 +5,7 @@ export interface MethodTestCase { method: string; args: JsonValue[]; expected: J
 export type TestCase = DesignTestCase | MethodTestCase;
 export function isDesignCase(testCase: TestCase): testCase is DesignTestCase { return "ops" in testCase; }
 
-export const VISUAL_HINT_TYPES = ["heap", "tree", "array", "grid", "map", "set", "linkedlist"] as const;
+export const VISUAL_HINT_TYPES = ["heap", "tree", "array", "grid", "map", "set", "linkedlist", "bars", "graph"] as const;
 export type VisualHintType = (typeof VISUAL_HINT_TYPES)[number];
 export type VisualHints = Record<string, VisualHintType>;   // key: "this.tweetMap" | "minHeap" | "a.b.c" (see H)
 

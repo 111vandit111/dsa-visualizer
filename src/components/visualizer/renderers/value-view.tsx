@@ -3,11 +3,15 @@
 import { ChevronRightIcon } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import type { SValue } from "@/lib/tracer/types";
+import { isBarsCompatible } from "@/lib/viz/bars";
 import { VIZ_LIMITS } from "@/lib/viz/constants";
 import { containerLabel, summarizeValue } from "@/lib/viz/format";
+import { graphNodeLabel } from "@/lib/viz/graph-model";
 import type { RenderType } from "@/lib/viz/types";
 import { cn } from "@/lib/utils";
 import { ArrayRenderer } from "./array-renderer";
+import { BarsRenderer } from "./bars-renderer";
+import { GraphRenderer } from "./graph-renderer";
 import { GridRenderer } from "./grid-renderer";
 import { HeapRenderer } from "./heap-renderer";
 import { LinkedListRenderer } from "./linked-list-renderer";
@@ -45,6 +49,10 @@ function RendererSwitch({ type, ...props }: RendererProps & { type: RenderType }
       return <LinkedListRenderer {...props} />;
     case "tree":
       return <TreeRenderer {...props} />;
+    case "bars":
+      return <BarsRenderer {...props} />;
+    case "graph":
+      return <GraphRenderer {...props} />;
   }
 }
 
@@ -59,7 +67,7 @@ function NestedValue({ type, ...props }: RendererProps & { type: RenderType }) {
         aria-expanded={isOpen}
         title={summary}
         onClick={() => setExpanded(props.path, !isOpen)}
-        className="flex max-w-full cursor-pointer items-center gap-1 rounded-md py-0.5 pr-1 text-left outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 max-sm:min-h-11"
+        className="flex max-w-full cursor-pointer items-center gap-1 rounded-md py-0.5 pr-1 text-left outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 max-sm:min-h-12"
       >
         <ChevronRightIcon className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform", isOpen && "rotate-90")} aria-hidden="true" />
         <span className={cn(MUTED_CHIP, isOpen && "micro-label")}>{isOpen ? containerLabel(props.object) : summary}</span>
@@ -84,14 +92,32 @@ function NestedValue({ type, ...props }: RendererProps & { type: RenderType }) {
   );
 }
 
+/** A graph node object inside another container: one node circle, not the whole graph it reaches. */
+function GraphNodeChip({ id, label }: { id: number; label: string }) {
+  const { objects } = useViz();
+  return (
+    <span
+      data-testid="graph-node-chip"
+      title={summarizeValue(objects, { k: "ref", id })}
+      className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-muted-foreground/60 bg-card align-middle font-mono text-xs text-foreground"
+    >
+      <span className="max-w-7 truncate">{label}</span>
+    </span>
+  );
+}
+
 function ObjectView({ id, path, depth, ancestors }: { id: number; path: string; depth: number; ancestors: readonly number[] }) {
-  const { objects, typeOf } = useViz();
+  const { objects, typeOf, viewModeOf } = useViz();
   const object = objects[id];
-  const type = typeOf(id);
+  const override = viewModeOf(path);
+  const isOverridden = !!object && ((override === "bars" && isBarsCompatible(object)) || (override === "array" && object.k === "array"));
+  const type = isOverridden ? override : typeOf(id);
   if (!object || !type) return <span className={MUTED_CHIP}>ref #{id}</span>;
   if (ancestors.includes(id)) return <span className={MUTED_CHIP} title="This object contains itself">↻ ref #{id}</span>;
   const props: RendererProps = { object, path, depth, ancestors: [...ancestors, id] };
   if (depth === 0) return <RendererSwitch type={type} {...props} />;
+  const nodeLabel = type === "graph" && object.k === "object" ? graphNodeLabel(objects, id) : null;
+  if (nodeLabel !== null) return <GraphNodeChip id={id} label={nodeLabel} />;
   if (depth > VIZ_LIMITS.maxNestDepth) return <span className={MUTED_CHIP}>{summarizeValue(objects, { k: "ref", id })}</span>;
   return <NestedValue type={type} {...props} />;
 }
@@ -106,6 +132,8 @@ export function ValueView({ value, path, depth = 0, ancestors = NO_ANCESTORS }: 
 export function InlineValue({ value }: { value: SValue }) {
   const { objects } = useViz();
   if (value.k !== "ref") return <PrimitiveChip value={value} />;
+  const nodeLabel = graphNodeLabel(objects, value.id);
+  if (nodeLabel !== null) return <GraphNodeChip id={value.id} label={nodeLabel} />;
   const summary = summarizeValue(objects, value);
   return (
     <span className={MUTED_CHIP} title={summary}>

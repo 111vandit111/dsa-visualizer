@@ -8,7 +8,10 @@ import { cn } from "@/lib/utils";
 /** Deeper stacks show only the innermost frames. */
 const MAX_VISIBLE_FRAMES = 8;
 
-/** Frames as stacked chips, innermost on top; chips slide in on call and out on return. */
+/**
+ * Frames as stacked chips, innermost on top; chips slide in on call and out on return.
+ * Rows do not use `layout` animation: they would glide from their old spot over the panels below, which jump at once.
+ */
 export function CallStack({ frames }: { frames: readonly TraceFrame[] }) {
   const innermostFirst = [...frames].reverse();
   const visible = innermostFirst.slice(0, MAX_VISIBLE_FRAMES);
@@ -21,7 +24,6 @@ export function CallStack({ frames }: { frames: readonly TraceFrame[] }) {
           {visible.map((frame, index) => (
             <motion.li
               key={frame.id}
-              layout="position"
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
