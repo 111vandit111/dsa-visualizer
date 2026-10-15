@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { VISUAL_HINT_TYPES } from "@/lib/tracer/types";
-import { DIFFICULTIES, type Difficulty } from "@/lib/types/question";
+import { DIFFICULTIES, KIND_LABELS, QUESTION_KINDS, type Difficulty, type QuestionKind } from "@/lib/types/question";
 import { FormField, describedBy, fieldIds } from "./form-field";
 import {
   DESIGN_EXAMPLE,
@@ -32,6 +32,10 @@ const HINTS_HEIGHT = "150px";
 
 function isDifficulty(value: string): value is Difficulty {
   return (DIFFICULTIES as readonly string[]).includes(value);
+}
+
+function isQuestionKind(value: string): value is QuestionKind {
+  return (QUESTION_KINDS as readonly string[]).includes(value);
 }
 
 export function BasicsFields({ values, errors, onChange }: FieldsProps) {
@@ -82,6 +86,30 @@ export function BasicsFields({ values, errors, onChange }: FieldsProps) {
             {DIFFICULTIES.map((difficulty) => (
               <SelectItem key={difficulty} value={difficulty}>
                 {difficulty}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </FormField>
+      <FormField field="kind" label="Kind" error={errors.kind}>
+        <Select
+          value={values.kind}
+          onValueChange={(value) => {
+            if (isQuestionKind(value)) onChange("kind", value);
+          }}
+        >
+          <SelectTrigger
+            id={fieldIds("kind").inputId}
+            data-testid="form-kind"
+            className="w-full"
+            aria-describedby={describedBy("kind", errors.kind)}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {QUESTION_KINDS.map((kind) => (
+              <SelectItem key={kind} value={kind}>
+                {KIND_LABELS[kind].singular}
               </SelectItem>
             ))}
           </SelectContent>

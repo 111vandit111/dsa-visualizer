@@ -30,6 +30,14 @@ describe("parseQuestionInput", () => {
     if (result.ok) expect(result.value.testCases).toHaveLength(1);
   });
 
+  it("keeps kind absent when the input omits it, and validates it when present", () => {
+    const omitted = parseQuestionInput(validInput);
+    expect(omitted.ok && omitted.value.kind).toBeUndefined();
+    const given = parseQuestionInput({ ...validInput, kind: "algorithm" });
+    expect(given.ok && given.value.kind).toBe("algorithm");
+    expect(issuePaths({ ...validInput, kind: "other" })).toContain("kind");
+  });
+
   it("accepts a method test case", () => {
     const result = parseQuestionInput({
       ...validInput,

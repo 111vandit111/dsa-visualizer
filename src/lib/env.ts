@@ -36,3 +36,36 @@ export function getAdminEnv(): AdminEnv {
 export function isProxyTrusted(): boolean {
   return process.env.TRUST_PROXY === "true";
 }
+
+export const DEFAULT_SITE_URL = "https://dsa-visualizer-gamma-six.vercel.app";
+
+function readEnv(name: string): string | undefined {
+  const value = process.env[name]?.trim();
+  return value ? value : undefined;
+}
+
+function toOrigin(candidate: string): string | undefined {
+  try {
+    const url = new URL(candidate);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return undefined;
+    return `${url.origin}${url.pathname}`.replace(/\/+$/, "");
+  } catch {
+    return undefined;
+  }
+}
+
+// Public origin used in canonical URLs, sitemap and JSON-LD. Never throws: a bad value falls back to the default.
+export function getSiteUrl(): string {
+  const explicit = readEnv("NEXT_PUBLIC_SITE_URL");
+  const vercelHost = readEnv("VERCEL_PROJECT_PRODUCTION_URL");
+  const candidates = [explicit, vercelHost ? `https://${vercelHost}` : undefined];
+  for (const candidate of candidates) {
+    const origin = candidate ? toOrigin(candidate) : undefined;
+    if (origin) return origin;
+  }
+  return DEFAULT_SITE_URL;
+}
+
+export function getVerification(): { google?: string; bing?: string } {
+  return { google: readEnv("GOOGLE_SITE_VERIFICATION"), bing: readEnv("BING_SITE_VERIFICATION") };
+}

@@ -18,6 +18,7 @@ export async function ensureIndexes(db: Db): Promise<void> {
   await Promise.all([
     questions.createIndex({ slug: 1 }, { unique: true }),
     questions.createIndex({ difficulty: 1 }),
+    questions.createIndex({ kind: 1 }),
     questions.createIndex({ tags: 1 }),
     questions.createIndex({ updatedAt: -1 }),
   ]);

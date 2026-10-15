@@ -1,10 +1,13 @@
 import { closeDb } from "@/lib/db";
 import { upsertBySlug } from "@/lib/questions/repository";
 import { checkSample } from "./seed/check-sample";
-import { ALL_SAMPLES } from "./seed/samples";
+import { ALGORITHM_SAMPLES, ALL_SAMPLES } from "./seed/samples";
+
+const ONLY_ALGORITHMS_FLAG = "--only=algorithms";
 
 async function seedSamples(): Promise<void> {
-  for (const build of ALL_SAMPLES) {
+  const samples = process.argv.includes(ONLY_ALGORITHMS_FLAG) ? ALGORITHM_SAMPLES : ALL_SAMPLES;
+  for (const build of samples) {
     const sample = checkSample(build());
     const { isCreated } = await upsertBySlug(sample);
     console.log(`${isCreated ? "created" : "updated"} ${sample.slug}`);

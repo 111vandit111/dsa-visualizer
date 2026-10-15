@@ -2,6 +2,7 @@ import { z } from "zod";
 import { VISUAL_HINT_TYPES, type TestCase } from "@/lib/tracer/types";
 import {
   DIFFICULTIES,
+  QUESTION_KINDS,
   type ApiFieldIssue,
   type ListParams,
 } from "@/lib/types/question";
@@ -23,7 +24,7 @@ export const QUESTION_LIMITS = {
   pageSizeDefault: 12,
 } as const;
 
-const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+export const SLUG_PATTERN =/^[a-z0-9]+(-[a-z0-9]+)*$/;
 const TAG_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 const HINT_KEY_PATTERN = /^(this\.)?[A-Za-z_$][\w$]*(\.[A-Za-z_$][\w$]*)*$/;
 
@@ -72,6 +73,7 @@ export const questionInputSchema = z.object({
   slug: z.string().max(QUESTION_LIMITS.slugMax).regex(SLUG_PATTERN, "Use lowercase letters, digits and single dashes"),
   title: z.string().trim().min(1).max(QUESTION_LIMITS.titleMax),
   difficulty: z.enum(DIFFICULTIES),
+  kind: z.enum(QUESTION_KINDS).optional(),
   tags: z
     .array(z.string().max(QUESTION_LIMITS.tagMax).regex(TAG_PATTERN, "Use lowercase letters, digits and dashes"))
     .max(QUESTION_LIMITS.tagsMax)
@@ -118,10 +120,13 @@ export function parseListParams(searchParams: URLSearchParams): ResolvedListPara
   const q = stripControlChars(searchParams.get("q") ?? "").trim().slice(0, QUESTION_LIMITS.searchMax);
   const difficultyRaw = searchParams.get("difficulty");
   const difficulty = DIFFICULTIES.find((value) => value === difficultyRaw);
+  const kindRaw = searchParams.get("kind");
+  const kind = QUESTION_KINDS.find((value) => value === kindRaw);
   const tags = parseTags(searchParams.get("tags"));
   return {
     ...(q ? { q } : {}),
     ...(difficulty ? { difficulty } : {}),
+    ...(kind ? { kind } : {}),
     ...(tags.length > 0 ? { tags } : {}),
     page: clampInt(searchParams.get("page"), 1, 1, QUESTION_LIMITS.pageMax),
     pageSize: clampInt(

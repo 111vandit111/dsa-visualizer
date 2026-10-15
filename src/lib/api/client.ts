@@ -76,6 +76,7 @@ function toQueryString(params: ListParams): string {
   const query = new URLSearchParams();
   if (params.q) query.set("q", params.q);
   if (params.difficulty) query.set("difficulty", params.difficulty);
+  if (params.kind) query.set("kind", params.kind);
   if (params.tags && params.tags.length > 0) query.set("tags", params.tags.join(","));
   if (params.page) query.set("page", String(params.page));
   if (params.pageSize) query.set("pageSize", String(params.pageSize));

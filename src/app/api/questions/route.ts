@@ -1,8 +1,10 @@
+import { revalidateTag } from "next/cache";
 import { connection, type NextRequest } from "next/server";
 import { fail, handleError, ok } from "@/lib/api/response";
 import { readJsonBody } from "@/lib/api/request";
 import { requireAdmin } from "@/lib/auth/admin";
 import { ConflictError, create, listQuestions } from "@/lib/questions/repository";
+import { QUESTIONS_CACHE_TAG } from "@/lib/seo/data";
 import { parseListParams } from "@/lib/validation/question";
 import { parseQuestionInput } from "@/lib/validation/question.server";
 
@@ -21,7 +23,9 @@ export async function POST(request: Request) {
     if (denied) return denied;
     const parsed = parseQuestionInput(await readJsonBody(request));
     if (!parsed.ok) return fail("validation_error", "Invalid question", 400, parsed.issues);
-    return ok(await create(parsed.value), 201);
+    const created = await create(parsed.value);
+    revalidateTag(QUESTIONS_CACHE_TAG, { expire: 0 });
+    return ok(created, 201);
   } catch (error) {
     if (error instanceof ConflictError) return fail("conflict", error.message, 409);
     return handleError(error, "POST /api/questions");

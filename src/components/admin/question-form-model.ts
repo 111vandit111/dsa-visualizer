@@ -4,12 +4,13 @@ import {
   testCasesSchema,
 } from "@/lib/validation/question";
 import type { TestCase } from "@/lib/tracer/types";
-import type { ApiFieldIssue, Difficulty, Question, QuestionInput } from "@/lib/types/question";
+import type { ApiFieldIssue, Difficulty, Question, QuestionInput, QuestionKind } from "@/lib/types/question";
 
 export const FORM_FIELDS = [
   "title",
   "slug",
   "difficulty",
+  "kind",
   "tags",
   "description",
   "solutionCode",
@@ -23,6 +24,7 @@ export interface QuestionFormValues {
   title: string;
   slug: string;
   difficulty: Difficulty;
+  kind: QuestionKind;
   tags: string[];
   description: string;
   solutionCode: string;
@@ -39,6 +41,7 @@ export const EMPTY_VALUES: QuestionFormValues = {
   title: "",
   slug: "",
   difficulty: "Easy",
+  kind: "question",
   tags: [],
   description: "",
   solutionCode: "",
@@ -80,6 +83,7 @@ export function valuesFromQuestion(question: Question): QuestionFormValues {
     title: question.title,
     slug: question.slug,
     difficulty: question.difficulty,
+    kind: question.kind,
     tags: question.tags,
     description: question.description,
     solutionCode: question.solutionCode,
@@ -154,6 +158,7 @@ export function parseFormValues(values: QuestionFormValues): ParsedForm {
     slug: values.slug,
     title: values.title,
     difficulty: values.difficulty,
+    kind: values.kind,
     tags: values.tags,
     description: values.description,
     solutionCode: values.solutionCode,

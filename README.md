@@ -6,7 +6,7 @@ Step through data structure and algorithm solutions line by line. Paste or pick 
 
 - Next.js 16 (App Router, Turbopack), React 19, TypeScript, Tailwind CSS 4
 - shadcn/ui (Radix) components, Framer Motion animations, CodeMirror 6 editor
-- MongoDB via the official `mongodb` driver, behind Next.js route handlers only
+- MongoDB via the official `mongodb` driver, read by route handlers and the cached SEO loaders (`src/lib/seo/data.ts`)
 - Tracer: acorn instruments the solution, which runs in a browser Web Worker
 - Vitest for unit tests
 
@@ -30,8 +30,20 @@ npm run dev                             # http://localhost:3000
 | `ADMIN_PASSWORD` | for admin | Password for `/admin` (at least 8 characters). |
 | `ADMIN_SESSION_SECRET` | for admin | Secret that signs the admin session cookie (at least 32 characters). |
 | `TRUST_PROXY` | no | `true` only behind a reverse proxy that sets `X-Real-IP` / `X-Forwarded-For`; enables per-client login throttling. Default `false` (one shared throttle bucket). |
+| `NEXT_PUBLIC_SITE_URL` | no | Public origin for canonical URLs, sitemap and structured data. Falls back to `VERCEL_PROJECT_PRODUCTION_URL`, then to the production URL. |
+| `GOOGLE_SITE_VERIFICATION` | no | Google Search Console "HTML tag" verification token (content value only). |
+| `BING_SITE_VERIFICATION` | no | Bing Webmaster Tools verification token (content value only). |
 
 Variables are validated when first used, so `npm run build` works without them.
+
+## SEO
+
+Public pages render title, description, canonical URL and JSON-LD on the server, and the site serves `/sitemap.xml`, `/robots.txt`, `/llms.txt` and `/llms-full.txt`. Question data for these comes from MongoDB through `src/lib/seo/data.ts` and is cached for at least 5 minutes; admin writes refresh it immediately.
+
+Set `NEXT_PUBLIC_SITE_URL` to your production origin, then do these once by hand:
+
+1. Google Search Console: add the property, verify it (set `GOOGLE_SITE_VERIFICATION` and redeploy, or use another method), then submit `https://<your-site>/sitemap.xml`.
+2. Bing Webmaster Tools: add the site (import from Search Console or set `BING_SITE_VERIFICATION`), then submit the same sitemap.
 
 ## API
 

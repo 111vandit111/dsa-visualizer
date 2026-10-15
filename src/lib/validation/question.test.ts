@@ -17,6 +17,12 @@ describe("parseListParams", () => {
     expect(parseListParams(new URLSearchParams("difficulty=%24ne")).difficulty).toBeUndefined();
   });
 
+  it("accepts only known kinds", () => {
+    expect(parseListParams(new URLSearchParams("kind=algorithm")).kind).toBe("algorithm");
+    expect(parseListParams(new URLSearchParams("kind=question")).kind).toBe("question");
+    expect(parseListParams(new URLSearchParams("kind=%24ne")).kind).toBeUndefined();
+  });
+
   it("splits, trims, lowercases and dedupes tags", () => {
     const params = parseListParams(new URLSearchParams("tags=Heap, design,heap,,bad tag"));
     expect(params.tags).toEqual(["heap", "design"]);

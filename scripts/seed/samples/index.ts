@@ -1,4 +1,4 @@
-import type { QuestionInput } from "@/lib/types/question";
+import type { QuestionInput, QuestionKind } from "@/lib/types/question";
 import { buildAllPathsSourceTarget } from "./all-paths-source-target";
 import { buildBinaryTreePaths } from "./binary-tree-paths";
 import { buildCloneGraph } from "./clone-graph";
@@ -34,9 +34,11 @@ const PROBLEM_SAMPLES: (() => QuestionInput)[] = [
   buildCloneGraph,
 ];
 
-/** Every seeded sample, keyed by module so `check-samples` can run one module at a time. */
-export const SAMPLE_MODULES: Record<string, (() => QuestionInput)[]> = {
-  problems: PROBLEM_SAMPLES,
+function withKind(builders: (() => QuestionInput)[], kind: QuestionKind): (() => QuestionInput)[] {
+  return builders.map((build) => () => ({ ...build(), kind }));
+}
+
+const ALGORITHM_MODULES: Record<string, (() => QuestionInput)[]> = {
   searching: SEARCHING_SAMPLES,
   sorting: SORTING_SAMPLES,
   stack: STACK_SAMPLES,
@@ -47,5 +49,18 @@ export const SAMPLE_MODULES: Record<string, (() => QuestionInput)[]> = {
   "tree-algorithms": TREE_ALGORITHMS_SAMPLES,
   graph: GRAPH_SAMPLES,
 };
+
+const ALGORITHM_BY_MODULE = Object.fromEntries(
+  Object.entries(ALGORITHM_MODULES).map(([name, builders]) => [name, withKind(builders, "algorithm")]),
+);
+
+/** Every seeded sample, keyed by module so `check-samples` can run one module at a time. Only `problems` are questions. */
+export const SAMPLE_MODULES: Record<string, (() => QuestionInput)[]> = {
+  problems: withKind(PROBLEM_SAMPLES, "question"),
+  ...ALGORITHM_BY_MODULE,
+};
+
+/** Flat list of the algorithm samples, for seeding only those (`seed:samples --only=algorithms`). */
+export const ALGORITHM_SAMPLES: (() => QuestionInput)[] = Object.values(ALGORITHM_BY_MODULE).flat();
 
 export const ALL_SAMPLES: (() => QuestionInput)[] = Object.values(SAMPLE_MODULES).flat();

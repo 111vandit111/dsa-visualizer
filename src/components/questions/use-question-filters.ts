@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { DIFFICULTIES, type Difficulty } from "@/lib/types/question";
+import { DIFFICULTIES, QUESTION_KINDS, type Difficulty, type QuestionKind } from "@/lib/types/question";
 
 export const SEARCH_DEBOUNCE_MS = 250;
+export const DEFAULT_KIND: QuestionKind = "algorithm";
 
 export interface QuestionFilters {
   q: string;
+  kind: QuestionKind;
   difficulty: Difficulty | undefined;
   tags: string[];
   page: number;
@@ -15,9 +17,11 @@ export interface QuestionFilters {
 
 function parseFilters(params: URLSearchParams): QuestionFilters {
   const difficultyRaw = params.get("difficulty");
+  const kindRaw = params.get("kind");
   const page = Number.parseInt(params.get("page") ?? "", 10);
   return {
     q: params.get("q")?.trim() ?? "",
+    kind: QUESTION_KINDS.find((value) => value === kindRaw) ?? DEFAULT_KIND,
     difficulty: DIFFICULTIES.find((value) => value === difficultyRaw),
     tags: (params.get("tags") ?? "").split(",").filter((tag) => tag.length > 0),
     page: Number.isFinite(page) && page > 1 ? page : 1,
@@ -26,6 +30,7 @@ function parseFilters(params: URLSearchParams): QuestionFilters {
 
 function buildUrl(pathname: string, filters: QuestionFilters): string {
   const params = new URLSearchParams();
+  if (filters.kind !== DEFAULT_KIND) params.set("kind", filters.kind);
   if (filters.q) params.set("q", filters.q);
   if (filters.difficulty) params.set("difficulty", filters.difficulty);
   if (filters.tags.length > 0) params.set("tags", filters.tags.join(","));
@@ -62,8 +67,10 @@ export function useQuestionFilters() {
 
   const clear = useCallback(() => {
     setSearchText("");
-    router.replace(pathname, { scroll: false });
-  }, [router, pathname]);
+    router.replace(buildUrl(pathname, { q: "", kind: filters.kind, difficulty: undefined, tags: [], page: 1 }), {
+      scroll: false,
+    });
+  }, [router, pathname, filters.kind]);
 
   const toggleTag = useCallback(
     (tag: string) => {

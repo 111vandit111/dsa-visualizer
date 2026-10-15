@@ -5,6 +5,7 @@ import type {
   Difficulty,
   Question,
   QuestionInput,
+  QuestionKind,
   QuestionListResult,
   QuestionSummary,
   TagFacet,
@@ -13,6 +14,7 @@ import { stripControlChars, type ResolvedListParams } from "@/lib/validation/que
 
 const MONGO_DUPLICATE_KEY_CODE = 11000;
 const MAX_TAG_FACETS = 50;
+const DEFAULT_KIND: QuestionKind = "question";
 
 export class ConflictError extends Error {
   constructor(message: string) {
@@ -27,10 +29,12 @@ interface HintEntry {
   type: VisualHintType;
 }
 
+// `kind` is optional on writes: an update that omits it must keep the stored kind.
 interface QuestionFields {
   slug: string;
   title: string;
   difficulty: Difficulty;
+  kind?: QuestionKind;
   tags: string[];
   description: string;
   solutionCode: string;
@@ -38,6 +42,7 @@ interface QuestionFields {
   visualHints: HintEntry[];
 }
 
+// Documents written before `kind` existed have no field and count as questions.
 interface QuestionDocument extends QuestionFields {
   _id: ObjectId;
   createdAt: Date;
@@ -60,6 +65,7 @@ function toFields(input: QuestionInput): QuestionFields {
     slug: input.slug,
     title: input.title,
     difficulty: input.difficulty,
+    ...(input.kind ? { kind: input.kind } : {}),
     tags: input.tags,
     description: input.description,
     solutionCode: input.solutionCode,
@@ -74,6 +80,7 @@ export function toQuestion(doc: QuestionDocument): Question {
     slug: doc.slug,
     title: doc.title,
     difficulty: doc.difficulty,
+    kind: doc.kind ?? DEFAULT_KIND,
     tags: doc.tags ?? [],
     description: doc.description ?? "",
     solutionCode: doc.solutionCode,
@@ -92,6 +99,12 @@ function escapeRegex(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function buildKindFilter(kind: QuestionKind | undefined): Filter<QuestionDocument> {
+  if (kind === "algorithm") return { kind: "algorithm" };
+  if (kind === "question") return { kind: { $ne: "algorithm" } };
+  return {};
+}
+
 function buildFilter(params: ResolvedListParams): Filter<QuestionDocument> {
   const filter: Filter<QuestionDocument> = {};
   const q = params.q ? stripControlChars(params.q) : "";
@@ -100,6 +113,7 @@ function buildFilter(params: ResolvedListParams): Filter<QuestionDocument> {
     filter.$or = [{ title: pattern }, { tags: pattern }];
   }
   if (params.difficulty) filter.difficulty = params.difficulty;
+  Object.assign(filter, buildKindFilter(params.kind));
   if (params.tags && params.tags.length > 0) filter.tags = { $all: params.tags };
   return filter;
 }
@@ -129,6 +143,7 @@ export async function listQuestions(params: ResolvedListParams): Promise<Questio
             slug: 1,
             title: 1,
             difficulty: 1,
+            kind: { $ifNull: ["$kind", DEFAULT_KIND] },
             tags: 1,
             updatedAt: 1,
             caseCount: { $size: { $ifNull: ["$testCases", []] } },
@@ -145,6 +160,7 @@ export async function listQuestions(params: ResolvedListParams): Promise<Questio
     collection.countDocuments(filter),
     collection
       .aggregate<{ _id: string; count: number }>([
+        { $match: buildKindFilter(params.kind) },
         { $unwind: "$tags" },
         { $group: { _id: "$tags", count: { $sum: 1 } } },
         { $sort: { count: -1, _id: 1 } },
@@ -163,6 +179,34 @@ export async function listQuestions(params: ResolvedListParams): Promise<Questio
   };
 }
 
+export type SeoRow = Pick<
+  Question,
+  "slug" | "title" | "difficulty" | "kind" | "tags" | "description" | "solutionCode" | "updatedAt"
+>;
+
+type SeoDocument = Omit<SeoRow, "updatedAt" | "kind"> & { kind?: QuestionKind; updatedAt: Date };
+
+// Read model for sitemap, llms.txt and metadata: only the fields those surfaces need, never test cases.
+export async function listForSeo(): Promise<SeoRow[]> {
+  const collection = await questionsCollection();
+  const docs = await collection
+    .find<SeoDocument>(
+      {},
+      { projection: { _id: 0, slug: 1, title: 1, difficulty: 1, kind: 1, tags: 1, description: 1, solutionCode: 1, updatedAt: 1 } },
+    )
+    .toArray();
+  return docs.map((doc) => ({
+    slug: doc.slug,
+    title: doc.title,
+    difficulty: doc.difficulty,
+    kind: doc.kind ?? DEFAULT_KIND,
+    tags: doc.tags ?? [],
+    description: doc.description ?? "",
+    solutionCode: doc.solutionCode,
+    updatedAt: doc.updatedAt.toISOString(),
+  }));
+}
+
 export async function getBySlug(slug: string): Promise<Question | null> {
   const collection = await questionsCollection();
   const doc = await collection.findOne({ slug });
@@ -172,7 +216,7 @@ export async function getBySlug(slug: string): Promise<Question | null> {
 export async function create(input: QuestionInput): Promise<Question> {
   const collection = await questionsCollection();
   const now = new Date();
-  const fields = toFields(input);
+  const fields = { ...toFields(input), kind: input.kind ?? DEFAULT_KIND };
   try {
     const { insertedId } = await collection.insertOne({ ...fields, createdAt: now, updatedAt: now } as QuestionDocument);
     return toQuestion({ ...fields, _id: insertedId, createdAt: now, updatedAt: now });
@@ -206,7 +250,10 @@ export async function upsertBySlug(input: QuestionInput): Promise<{ isCreated: b
   const now = new Date();
   const result = await collection.updateOne(
     { slug: input.slug },
-    { $set: { ...toFields(input), updatedAt: now }, $setOnInsert: { createdAt: now } },
+    {
+      $set: { ...toFields(input), updatedAt: now },
+      $setOnInsert: { createdAt: now, ...(input.kind ? {} : { kind: DEFAULT_KIND }) },
+    },
     { upsert: true },
   );
   return { isCreated: result.upsertedCount > 0 };
